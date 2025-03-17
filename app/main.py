@@ -1,7 +1,8 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from app.routers import stock_router
 
-app = FastAPI(title="ML Backend Service", description="Machine Learning service with FastAPI")
+app = FastAPI(title="Stock Prediction Service", description="삼성전자 주식 예측 서비스")
 
 # CORS 설정
 origins = [
@@ -18,16 +19,20 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# 라우터 등록
+app.include_router(stock_router.router)
 
 @app.get("/")
 def read_root():
-    return {"message": "ML Backend Service is running"}
-
+    return {
+        "message": "삼성전자 주가 예측 서비스가 실행 중입니다",
+        "endpoints": [
+            {"path": "/api/stock/data", "method": "GET", "description": "삼성전자 주가 데이터 조회"},
+            {"path": "/api/stock/train", "method": "POST", "description": "예측 모델 학습"},
+            {"path": "/api/stock/predict", "method": "GET", "description": "다음 날 주가 예측"}
+        ]
+    }
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
-
-from app.routers import model_router
-
-app.include_router(model_router.router)
+    uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=True)
