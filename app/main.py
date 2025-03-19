@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.routers import stock_router
+from app.routers import model_router
+from app.routers import open_api_router
 
 app = FastAPI(title="Stock Prediction Service", description="삼성전자 주식 예측 서비스")
 
@@ -20,16 +21,19 @@ app.add_middleware(
 )
 
 # 라우터 등록
-app.include_router(stock_router.router)
+app.include_router(model_router.router)
+app.include_router(open_api_router.router)
 
 @app.get("/")
 def read_root():
     return {
         "message": "삼성전자 주가 예측 서비스가 실행 중입니다",
         "endpoints": [
-            {"path": "/api/stock/data", "method": "GET", "description": "삼성전자 주가 데이터 조회"},
-            {"path": "/api/stock/train", "method": "POST", "description": "예측 모델 학습"},
-            {"path": "/api/stock/predict", "method": "GET", "description": "다음 날 주가 예측"}
+            {"path": "/api/model/data", "method": "GET", "description": "삼성전자 주가 데이터 조회 (새 구조)"},
+            {"path": "/api/model/train", "method": "POST", "description": "LSTM 모델 학습 (새 구조)"},
+            {"path": "/api/model/predict", "method": "GET", "description": "다음 날 주가 예측 (새 구조)"},
+            {"path": "/stock/getStockPriceInfo", "method": "GET", "description": "종목 검색 (OpenAPI)"},
+            {"path": "/stock/{stock_code}", "method": "GET", "description": "종목 데이터 조회 (OpenAPI)"}
         ]
     }
 
