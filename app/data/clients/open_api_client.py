@@ -1,6 +1,7 @@
 import aiohttp
 import ssl
 import certifi
+import json
 from typing import Dict, Any, Optional
 from urllib.parse import quote_plus
 
@@ -95,7 +96,7 @@ class OpenApiClient:
             numOfRows: 한 페이지 결과 수
             
         Returns:
-            Dict[str, Any]: API 응답 데이터
+            Dict[str, Any]: API 응답 데이터 (JSON 객체)
         """
         
         encoded_key = self.encode_api_key(self.api_key)
@@ -110,7 +111,17 @@ class OpenApiClient:
             "resultType": "json"  # 기본값으로 json 형식 사용
         }
         
-        # aiohttp로 먼저 시도
+        # aiohttp로 API 호출
         content = await self.fetch_aiohttps(endpoint, params)
-
-        return content
+        
+        # API 응답 처리
+        if content:
+            try:
+                # 문자열을 JSON 객체로 파싱
+                json_data = json.loads(content)
+                return json_data
+            except json.JSONDecodeError as e:
+                print(f"JSON 파싱 오류: {e}")
+                return {"error": "JSON 파싱 실패", "content": content[:100]}
+        else:
+            return {"error": "API 호출 실패"}
