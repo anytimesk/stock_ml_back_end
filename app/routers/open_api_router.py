@@ -30,9 +30,8 @@ async def get_stock_price_info(
             pageNo=pageNo,
             numOfRows=numOfRows
         )
-        print('result ', result)
-            
         return result
+    
     except Exception as e:
         # 예외 발생 시 오류 메시지 그대로 반환
         raise HTTPException(status_code=500, detail=str(e))
