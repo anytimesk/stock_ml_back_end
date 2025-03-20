@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.routers import model_router
 from app.routers import open_api_router
+import app.core  # core 모듈 임포트하여 초기화
 
 app = FastAPI(title="Stock Prediction Service", description="주식 예측 서비스")
 

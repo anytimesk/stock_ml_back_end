@@ -2,7 +2,7 @@ import aiohttp
 import ssl
 import certifi
 import json
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 from urllib.parse import quote_plus
 
 class OpenApiClient:
@@ -98,13 +98,12 @@ class OpenApiClient:
             Dict[str, Any]: API 응답 데이터 (JSON 객체)
         """
         
-        encoded_key = self.encode_api_key(self.api_key)
         endpoint = f"{self.base_url}/getStockPriceInfo"
         
         # 파라미터를 딕셔너리로 정의
         params = {
             "itmsNm": itmsNm,
-            "serviceKey": encoded_key,  # 인코딩 함수 또는 저장된 값 사용
+            "serviceKey": self.encode_api_key(self.api_key),  # 인코딩 함수 또는 저장된 값 사용
             "numOfRows": numOfRows,
             "pageNo": pageNo,
             "resultType": "json"  # 기본값으로 json 형식 사용

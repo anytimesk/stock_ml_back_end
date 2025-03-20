@@ -44,3 +44,6 @@ var/
 # Logs
 /logs/
 *.log
+
+# Storage
+storage/
