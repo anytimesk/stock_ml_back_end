@@ -2,68 +2,22 @@ from fastapi import APIRouter, HTTPException, Query, Depends
 from typing import Optional, List, Dict
 from app.data.clients.open_api_client import OpenApiClient
 from app.utils import CSVHandler
-from pydantic import BaseModel
 from app.core.config import API_BASE_URL, API_KEY
 import pandas as pd
 from app.ml import ModelService
-from enum import Enum
-import os
 from pathlib import Path
 from datetime import datetime, timedelta
 import numpy as np
 import json
 
-# 응답 모델 정의
-class CSVSaveResponse(BaseModel):
-    success: bool
-    message: str
-    file_path: Optional[str] = None
-    records_count: Optional[int] = None
-
-# CSV 파일 정보 모델
-class CSVFileInfo(BaseModel):
-    filename: str
-    path: str
-    size_bytes: int
-    created_at: str
-    isin_code: str
-    stock_name: str
-
-# CSV 파일 목록 응답 모델
-class CSVListResponse(BaseModel):
-    success: bool
-    message: str
-    files: List[CSVFileInfo]
-    count: int
-
-# 모델 유형 Enum
-class ModelType(str, Enum):
-    LSTM = "lstm"
-    RNN = "rnn"
-    # 추후 다른 모델 유형 추가 가능
-
-# 모델 학습 응답 모델
-class TrainModelMetrics(BaseModel):
-    train_loss: float
-    val_loss: Optional[float] = None
-    test_loss: Optional[float] = None
-    test_mae: Optional[float] = None
-    epochs_trained: int
-    timestamp: str
-
-class TrainModelResponse(BaseModel):
-    success: bool
-    message: str
-    metrics: Optional[TrainModelMetrics] = None
-    model_path: Optional[str] = None
-
-# 예측 응답 모델
-class PredictionResponse(BaseModel):
-    success: bool
-    message: str
-    prediction: Optional[float] = None
-    date: Optional[str] = None
-    prediction_array: Optional[List[float]] = None
+# 스키마 import
+from app.schemas.csv import CSVSaveResponse, CSVFileInfo, CSVListResponse
+from app.schemas.model import (
+    ModelType,
+    TrainModelMetrics,
+    TrainModelResponse,
+    PredictionResponse
+)
 
 # 라우터 정의
 router = APIRouter(prefix="/ml", tags=["ml"])
