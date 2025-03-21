@@ -1,7 +1,7 @@
 import pandas as pd
 import numpy as np
 from sklearn.preprocessing import MinMaxScaler
-from typing import Tuple, Dict, Any, Optional, List
+from typing import Tuple, Dict, Any
 
 def create_sequences(data: np.ndarray, time_steps: int) -> Tuple[np.ndarray, np.ndarray]:
     """

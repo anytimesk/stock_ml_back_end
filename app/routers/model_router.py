@@ -5,7 +5,7 @@ from app.utils import CSVHandler
 from pydantic import BaseModel
 from app.core.config import API_BASE_URL, API_KEY
 import pandas as pd
-from app.ml.models.lstm_model import LSTMModel
+from app.ml.models.abs_model import AbsModel
 from app.ml.training import ModelTrainer
 from enum import Enum
 import os
@@ -38,6 +38,7 @@ class CSVListResponse(BaseModel):
 # 모델 유형 Enum
 class ModelType(str, Enum):
     lstm = "lstm"
+    rnn = "rnn"
     # 추후 다른 모델 유형 추가 가능
 
 # 모델 학습 응답 모델
@@ -115,12 +116,12 @@ async def save_stock_data_csv(
             )
         
         # isinCd 값 추출 (첫 번째 항목의 isinCd 사용)
-        isin_cd = str(items[0].get("isinCd", "unknown"))
+        isin_code = str(items[0].get("isinCd", "unknown"))
         
         # CSVHandler를 사용하여 CSV 파일 저장
         file_path = CSVHandler.save_to_csv(
             data=items,
-            isin_code=isin_cd,
+            isin_code=isin_code,
             stock_name=itmsNm
         )
         
@@ -140,7 +141,7 @@ async def save_stock_data_csv(
 @router.post("/trainModel", response_model=TrainModelResponse)
 async def train_model(
     isin_code: str = Query(..., description="종목 코드"),
-    model_type: ModelType = Query(..., description="모델 유형 (현재는 LSTM만 지원)"),
+    model_type: ModelType = Query(..., description="모델 유형 (현재는 LSTM, RNN 지원)"),
     time_steps: int = Query(3, description="시계열 데이터의 시퀀스 길이"),
     epochs: int = Query(50, description="학습 에포크 수"),
     batch_size: int = Query(32, description="배치 크기"),
@@ -148,7 +149,7 @@ async def train_model(
 ):
     """
     주식 데이터를 사용하여 머신러닝 모델을 학습합니다.
-    현재는 LSTM 모델만 지원하며, 추후 다른 모델들도 추가될 수 있습니다.
+    현재는 LSTM, RNN 모델을 지원하며, 추후 다른 모델들도 추가될 수 있습니다.
     """
 
     try:
@@ -176,12 +177,12 @@ async def train_model(
         }
         
         # 모델 초기화
-        if model_type == ModelType.lstm:
-            model = LSTMModel(model_params)
-        else:
+        try:
+            model = AbsModel.create(model_type.value, model_params)
+        except ValueError as e:
             return TrainModelResponse(
                 success=False,
-                message=f"지원하지 않는 모델 유형입니다: {model_type}"
+                message=str(e)
             )
         
         # 모델 트레이너 초기화

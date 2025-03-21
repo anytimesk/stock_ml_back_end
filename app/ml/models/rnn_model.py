@@ -1,35 +1,35 @@
 import tensorflow as tf
-from tensorflow.keras.models import Sequential, load_model, save_model
-from tensorflow.keras.layers import LSTM, Dense, Dropout
+from tensorflow.keras.models import Sequential, load_model
+from tensorflow.keras.layers import SimpleRNN, Dense, Dropout
 from tensorflow.keras.callbacks import EarlyStopping
 import numpy as np
 import os
 from typing import Dict, Any, Optional
 from .abs_model import AbsModel
 
-class LSTMModel(AbsModel):
-    """LSTM 기반 시계열 예측 모델"""
+class RNNModel(AbsModel):
+    """RNN 기반 시계열 예측 모델"""
     
     def __init__(self, params: Optional[Dict[str, Any]] = None):
         super().__init__(params)
         self.time_steps = params.get('time_steps', 3)
-        self.units = params.get('units', 50)
+        self.units = params.get('units', 32)
         self.dropout = params.get('dropout', 0.2)
         self.scaler = None
         self.last_sequence = None
         
     def build(self):
-        """LSTM 모델 구축"""
+        """RNN 모델 구축"""
         model = Sequential()
-        model.add(LSTM(self.units, return_sequences=True, 
-                       input_shape=(self.time_steps, 1)))
+        model.add(SimpleRNN(self.units, return_sequences=True, 
+                          input_shape=(self.time_steps, 1)))
         model.add(Dropout(self.dropout))
-        model.add(LSTM(self.units, return_sequences=False))
+        model.add(SimpleRNN(self.units, return_sequences=False))
         model.add(Dropout(self.dropout))
         model.add(Dense(1))
         
         model.compile(
-            optimizer='adam', 
+            optimizer='adam',
             loss='mean_squared_error',
             metrics=['mae']
         )
@@ -43,7 +43,7 @@ class LSTMModel(AbsModel):
             self.build()
             
         epochs = kwargs.get('epochs', 50)
-        batch_size = kwargs.get('batch_size', 1)
+        batch_size = kwargs.get('batch_size', 32)
         validation_split = kwargs.get('validation_split', 0.2)
         
         early_stopping = EarlyStopping(
@@ -88,7 +88,7 @@ class LSTMModel(AbsModel):
         os.makedirs(os.path.dirname(path), exist_ok=True)
         self.model.save(path)
         
-        # 필요한 경우 scaler와 last_sequence도 저장
+        # scaler와 last_sequence 저장
         if self.scaler is not None:
             scaler_path = os.path.join(os.path.dirname(path), "scaler.npy")
             np.save(scaler_path, self.scaler.scale_)
@@ -96,7 +96,7 @@ class LSTMModel(AbsModel):
         if self.last_sequence is not None:
             sequence_path = os.path.join(os.path.dirname(path), "last_sequence.npy")
             np.save(sequence_path, self.last_sequence)
-        
+    
     def load(self, path: str):
         """모델 로드"""
         if not os.path.exists(path):
@@ -104,7 +104,7 @@ class LSTMModel(AbsModel):
             
         self.model = load_model(path)
         
-        # scaler와 last_sequence도 로드
+        # scaler와 last_sequence 로드
         scaler_path = os.path.join(os.path.dirname(path), "scaler.npy")
         if os.path.exists(scaler_path):
             from sklearn.preprocessing import MinMaxScaler
@@ -119,7 +119,7 @@ class LSTMModel(AbsModel):
         sequence_path = os.path.join(os.path.dirname(path), "last_sequence.npy")
         if os.path.exists(sequence_path):
             self.last_sequence = np.load(sequence_path)
-        
+    
     @property
     def model_type(self) -> str:
-        return "lstm" 
+        return "rnn" 

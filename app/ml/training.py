@@ -6,13 +6,13 @@ import json
 import pickle
 from datetime import datetime
 from pathlib import Path
-from app.ml.models.base_model import BaseModel
+from app.ml.models.abs_model import AbsModel
 from app.ml.preprocessing import prepare_stock_data
 
 class ModelTrainer:
     """모델 학습 및 관리"""
     
-    def __init__(self, model: BaseModel, model_dir: Optional[str] = None):
+    def __init__(self, model: AbsModel, model_dir: Optional[str] = None):
         self.model = model
         self.model_dir = Path(model_dir or Path(__file__).parent.parent / "models")
         os.makedirs(self.model_dir, exist_ok=True)
