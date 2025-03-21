@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 import os
 import json
+import pickle
 from datetime import datetime
 from pathlib import Path
 from app.ml.models.base_model import BaseModel
@@ -18,7 +19,7 @@ class ModelTrainer:
         self.metrics = {}
         
     def train_model(self, df: pd.DataFrame, target_col: str = 'clpr', 
-                    time_steps: Optional[int] = None, **kwargs) -> Dict[str, Any]:
+                    time_steps: Optional[int] = None, isin_code: str = None, **kwargs) -> Dict[str, Any]:
         """
         데이터프레임을 사용해 모델 학습
         
@@ -26,6 +27,7 @@ class ModelTrainer:
             df: 학습 데이터 DataFrame
             target_col: 예측할 열 이름
             time_steps: 시퀀스 길이 (None인 경우 모델 기본값 사용)
+            isin_code: 종목 코드
             **kwargs: 추가 학습 매개변수
             
         Returns:
@@ -67,33 +69,75 @@ class ModelTrainer:
         }
         
         # 모델 저장
-        self.save_model()
+        model_path = self.save_model(
+            target_col=target_col,
+            time_steps=time_steps,
+            scaler=data['scaler'],
+            isin_code=isin_code,
+            **kwargs
+        )
         
         return self.metrics
     
-    def save_model(self, model_name: Optional[str] = None) -> str:
+    def save_model(self, target_col: str, time_steps: int, scaler: Any, 
+                  isin_code: str = None, model_name: Optional[str] = None, **kwargs) -> str:
         """
-        학습된 모델 저장
+        학습된 모델과 관련 정보를 저장
         
         Args:
+            target_col: 예측 대상 컬럼명
+            time_steps: 시퀀스 길이
+            scaler: 데이터 스케일러
+            isin_code: 종목 코드
             model_name: 모델 이름 (None인 경우 자동 생성)
+            **kwargs: 추가 학습 파라미터
             
         Returns:
-            str: 저장된 모델 경로
+            str: 저장된 모델 디렉토리 경로
         """
         if model_name is None:
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            model_name = f"{self.model.model_type}_{timestamp}"
+            # YYYYMMDD 형식의 날짜만 사용
+            timestamp = datetime.now().strftime("%Y%m%d")
+            if isin_code:
+                model_name = f"{isin_code}_{self.model.model_type}_{timestamp}"
+            else:
+                model_name = f"{self.model.model_type}_{timestamp}"
             
-        model_path = self.model_dir / model_name
+        # 모델 디렉토리 생성
+        model_dir = self.model_dir / model_name
+        os.makedirs(model_dir, exist_ok=True)
+        
+        # 1. 모델 저장
+        model_path = model_dir / "model.keras"
         self.model.save(str(model_path))
         
-        # 메트릭 저장
-        metrics_path = self.model_dir / f"{model_name}_metrics.json"
+        # 2. 스케일러 저장
+        scaler_path = model_dir / "scaler.pkl"
+        with open(scaler_path, 'wb') as f:
+            pickle.dump(scaler, f)
+        
+        # 3. 파라미터 저장
+        params = {
+            "target_col": target_col,
+            "time_steps": time_steps,
+            "model_type": self.model.model_type,
+            "model_params": {
+                "units": getattr(self.model, 'units', None),
+                "dropout": getattr(self.model, 'dropout', None)
+            },
+            "training_params": kwargs
+        }
+        
+        params_path = model_dir / "params.json"
+        with open(params_path, 'w') as f:
+            json.dump(params, f, indent=4)
+        
+        # 4. 메트릭스 저장
+        metrics_path = model_dir / "metrics.json"
         with open(metrics_path, 'w') as f:
-            json.dump(self.metrics, f)
+            json.dump(self.metrics, f, indent=4)
             
-        return str(model_path)
+        return str(model_dir)
     
     def load_model(self, model_name: str) -> bool:
         """

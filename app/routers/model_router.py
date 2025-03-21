@@ -1,12 +1,16 @@
 from fastapi import APIRouter, HTTPException, Query, Depends
-from typing import Dict, Any, Optional, List
+from typing import Optional, List
 from app.data.clients.open_api_client import OpenApiClient
+from app.utils import CSVHandler
+from pydantic import BaseModel
+from app.core.config import API_BASE_URL, API_KEY
 import pandas as pd
+from app.ml.models.lstm_model import LSTMModel
+from app.ml.training import ModelTrainer
+from enum import Enum
 import os
 from pathlib import Path
-import datetime
-from pydantic import BaseModel
-from app.core.config import API_BASE_URL, API_KEY, CSV_DIR, DATE_FORMAT, BASE_DIR
+from datetime import datetime
 
 # 응답 모델 정의
 class CSVSaveResponse(BaseModel):
@@ -21,7 +25,7 @@ class CSVFileInfo(BaseModel):
     path: str
     size_bytes: int
     created_at: str
-    stock_code: str
+    isin_code: str
     stock_name: str
 
 # CSV 파일 목록 응답 모델
@@ -31,12 +35,24 @@ class CSVListResponse(BaseModel):
     files: List[CSVFileInfo]
     count: int
 
+# 모델 유형 Enum
+class ModelType(str, Enum):
+    lstm = "lstm"
+    # 추후 다른 모델 유형 추가 가능
+
+# 모델 학습 응답 모델
+class TrainModelResponse(BaseModel):
+    success: bool
+    message: str
+    metrics: Optional[dict] = None
+    model_path: Optional[str] = None
+
 # 라우터 정의
 router = APIRouter(prefix="/ml", tags=["ml"])
 
 # OpenAPI 클라이언트 의존성
 def get_open_api_client():
-    return OpenApiClient(api_key=API_KEY, base_url=API_BASE_URL)
+    return OpenApiClient(API_KEY, API_BASE_URL)
 
 @router.get("/getStockData", response_model=CSVListResponse)
 async def get_stock_data_files(
@@ -47,65 +63,14 @@ async def get_stock_data_files(
     선택적으로 종목명으로 필터링할 수 있습니다.
     """
     try:
-        # CSV 디렉토리 확인
-        if not os.path.exists(CSV_DIR):
-            return CSVListResponse(
-                success=True,
-                message="CSV 디렉토리가 아직 생성되지 않았습니다.",
-                files=[],
-                count=0
-            )
-        
-        # 모든 CSV 파일 검색
-        csv_files = list(CSV_DIR.glob("*.csv"))
-        
-        # 파일 정보 수집
-        file_info_list = []
-        for file_path in csv_files:
-            # 파일명 분석 (isinCd_itmsNm_date.csv 형식)
-            filename = file_path.name
-            parts = filename.split('_')
-            
-            if len(parts) >= 3:
-                stock_code = parts[0]
-                
-                # 날짜는 맨 뒤의 ".csv" 제거 후 마지막 요소
-                date_part = parts[-1].replace(".csv", "")
-                
-                # 종목명은 중간 부분들 (코드와 날짜 사이의 모든 부분)
-                stock_name = '_'.join(parts[1:-1])
-                
-                # 종목명 필터링이 있는 경우
-                if itmsNm and itmsNm.lower() not in stock_name.lower():
-                    continue
-                
-                # 파일 생성 시간 
-                created_time = datetime.datetime.fromtimestamp(file_path.stat().st_ctime)
-                created_at = created_time.strftime("%Y-%m-%d %H:%M:%S")
-                
-                # 상대 경로 계산 (프로젝트 루트 경로 제거)
-                try:
-                    relative_path = file_path.relative_to(BASE_DIR)
-                    path_str = str(relative_path)
-                except ValueError:
-                    # 상대 경로 계산이 실패한 경우, 전체 경로에서 앞부분 제거
-                    path_str = str(file_path).replace(str(BASE_DIR) + '/', '')
-                
-                file_info = CSVFileInfo(
-                    filename=filename,
-                    path=path_str,  # 상대 경로 사용
-                    size_bytes=file_path.stat().st_size,
-                    created_at=created_at,
-                    stock_code=stock_code,
-                    stock_name=stock_name
-                )
-                file_info_list.append(file_info)
+        # CSVHandler를 사용하여 파일 목록 조회
+        files = CSVHandler.get_csv_files(stock_name=itmsNm)
         
         return CSVListResponse(
             success=True,
-            message=f"총 {len(file_info_list)}개의 CSV 파일이 있습니다.",
-            files=file_info_list,
-            count=len(file_info_list)
+            message=f"총 {len(files)}개의 CSV 파일이 있습니다.",
+            files=files,
+            count=len(files)
         )
     
     except Exception as e:
@@ -149,31 +114,21 @@ async def save_stock_data_csv(
                 message="검색 결과가 없습니다."
             )
         
-        # 데이터프레임으로 변환
-        df = pd.DataFrame(items)
-        
-        # 컬럼명을 대문자로 변환
-        df.columns = [col.upper() for col in df.columns]
-        
         # isinCd 값 추출 (첫 번째 항목의 isinCd 사용)
         isin_cd = str(items[0].get("isinCd", "unknown"))
         
-        # 날짜 포맷 설정
-        today = datetime.datetime.now().strftime(DATE_FORMAT)
-        
-        # 파일명 생성 (isinCd값_itmsNm_생성일.csv)
-        safe_itms_nm = itmsNm.replace("/", "_").replace("\\", "_")  # 파일명에 사용할 수 없는 문자 처리
-        csv_filename = f"{isin_cd}_{safe_itms_nm}_{today}.csv"
-        csv_path = CSV_DIR / csv_filename
-        
-        # CSV 파일로 저장
-        df.to_csv(csv_path, index=False)
+        # CSVHandler를 사용하여 CSV 파일 저장
+        file_path = CSVHandler.save_to_csv(
+            data=items,
+            isin_code=isin_cd,
+            stock_name=itmsNm
+        )
         
         return CSVSaveResponse(
             success=True,
             message=f"{itmsNm} 종목 데이터를 성공적으로 CSV 파일로 저장했습니다.",
-            file_path=str(csv_path),
-            records_count=len(df)
+            file_path=file_path,
+            records_count=len(items)
         )
         
     except Exception as e:
@@ -182,3 +137,87 @@ async def save_stock_data_csv(
             message=f"CSV 저장 중 오류 발생: {str(e)}"
         )
 
+@router.post("/trainModel", response_model=TrainModelResponse)
+async def train_model(
+    isin_code: str = Query(..., description="종목 코드"),
+    model_type: ModelType = Query(..., description="모델 유형 (현재는 LSTM만 지원)"),
+    time_steps: int = Query(3, description="시계열 데이터의 시퀀스 길이"),
+    epochs: int = Query(50, description="학습 에포크 수"),
+    batch_size: int = Query(32, description="배치 크기"),
+    validation_split: float = Query(0.2, description="검증 데이터 비율")
+):
+    """
+    주식 데이터를 사용하여 머신러닝 모델을 학습합니다.
+    현재는 LSTM 모델만 지원하며, 추후 다른 모델들도 추가될 수 있습니다.
+    """
+
+    try:
+        # CSV 파일 목록 조회
+        files = CSVHandler.get_csv_files()
+        target_files = [f for f in files if f["isin_code"] == isin_code]
+        
+        if not target_files:
+            return TrainModelResponse(
+                success=False,
+                message=f"종목 코드 {isin_code}에 해당하는 CSV 파일을 찾을 수 없습니다."
+            )
+            
+        # 가장 최근 파일 사용
+        latest_file = sorted(target_files, key=lambda x: x["created_at"], reverse=True)[0]
+        
+        # CSV 파일 읽기
+        df = pd.read_csv(latest_file["path"])
+        
+        # 모델 파라미터 설정
+        model_params = {
+            "time_steps": time_steps,
+            "units": 50,  # LSTM 유닛 수
+            "dropout": 0.2  # 드롭아웃 비율
+        }
+        
+        # 모델 초기화
+        if model_type == ModelType.lstm:
+            model = LSTMModel(model_params)
+        else:
+            return TrainModelResponse(
+                success=False,
+                message=f"지원하지 않는 모델 유형입니다: {model_type}"
+            )
+        
+        # 모델 트레이너 초기화
+        model_dir = Path("storage/models")
+        trainer = ModelTrainer(model, str(model_dir))
+        
+        # 모델 학습
+        metrics = trainer.train_model(
+            df=df,
+            target_col="CLPR",  # 종가 기준
+            time_steps=time_steps,
+            isin_code=isin_code,  # isin_code 전달
+            epochs=epochs,
+            batch_size=batch_size,
+            validation_split=validation_split
+        )
+        
+        # 모델 저장 경로 생성
+        timestamp = datetime.now().strftime("%Y%m%d")
+        model_name = f"{isin_code}_{model_type}_{timestamp}"
+        model_path = str(model_dir / model_name)
+        
+        return TrainModelResponse(
+            success=True,
+            message=f"{isin_code} 종목의 {model_type} 모델 학습이 완료되었습니다.",
+            metrics=metrics,
+            model_path=model_path
+        )
+    
+    except Exception as e:
+        print(f"\n=== Train Model Error ===")
+        print(f"Error Type: {type(e)}")
+        print(f"Error Message: {str(e)}")
+        print("=======================\n")
+        
+        return TrainModelResponse(
+            success=False,
+            message=f"모델 학습 중 오류 발생: {str(e)}"
+        )
