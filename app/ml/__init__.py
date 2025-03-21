@@ -1,17 +1,11 @@
 """
-머신러닝 모듈 패키지
+머신러닝 모듈
 """
-from app.ml.models.lstm_model import LSTMModel
-from app.ml.preprocessing import prepare_stock_data, create_sequences
-from app.ml.training import ModelTrainer
-from app.ml.evaluation import calculate_metrics, plot_predictions, evaluate_predictions
+from app.ml.model_service import ModelService
+from app.ml.models import LSTMModel, RNNModel
 
-__all__ = [
-    'LSTMModel',
-    'prepare_stock_data',
-    'create_sequences',
-    'ModelTrainer',
-    'calculate_metrics',
-    'plot_predictions',
-    'evaluate_predictions'
-] 
+# 모델 등록
+ModelService.register("lstm", LSTMModel)
+ModelService.register("rnn", RNNModel)
+
+__all__ = ['ModelService'] 
