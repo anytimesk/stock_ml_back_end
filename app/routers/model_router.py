@@ -241,15 +241,14 @@ async def train_model(
 @router.post("/predict/{isin_code}")
 async def predict_stock_price(
     isin_code: str,
-    model_type: ModelType,
-    model_date: str = Query(..., description="모델 날짜 (YYYYMMDD 형식)")
+    model_type: ModelType
 ) -> PredictionResponse:
     """
     학습된 모델을 사용하여 다음날 주가 예측
     """
     try:
         # 모델 경로 생성
-        model_dir = f"{isin_code}_{model_type.value}_{model_date}"
+        model_dir = f"{isin_code}_{model_type.value}"
         model_path = Path("storage/models") / model_dir
         
         if not model_path.exists():

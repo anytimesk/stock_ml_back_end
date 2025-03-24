@@ -142,8 +142,7 @@ class AbsModel(ABC):
     def _save_with_metadata(self, isin_code: str, target_col: str, **kwargs) -> str:
         """모델과 메타데이터 저장"""
         # 모델 저장 경로 생성
-        timestamp = datetime.now().strftime("%Y%m%d")
-        model_name = f"{isin_code}_{self.model_type}_{timestamp}"
+        model_name = f"{isin_code}_{self.model_type}"
         model_dir = self.model_dir / model_name
         model_dir.mkdir(parents=True, exist_ok=True)
         
